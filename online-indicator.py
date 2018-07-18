@@ -35,31 +35,31 @@ def state_formatter(state, filters):
         return "Error"
 
 
-class StateWriter:
-    def __init__(self, fpath, filters=[]):
-        self.fpath = fpath
-        self.filters = filters
-        self.old_state = None
+@contextmanager
+def StateWriter(fpath, filters=[]):
+    old_state = None
+    state_file = None
 
-    def _writeline(self, text):
-        self.file.seek(0)
-        self.file.truncate()
-        self.file.write(text + '\n')
+    def writeline(text):
+        state_file.seek(0)
+        state_file.truncate()
+        state_file.write(text + '\n')
 
-    def update(self, state):
-        if self.old_state != state:
-            self.old_state = state
-            text = state_formatter(state, self.filters)
-            self._writeline(text)
+    def update(state):
+        nonlocal old_state
+        if old_state != state:
+            old_state = state
+            text = state_formatter(state, filters)
+            writeline(text)
 
-    def __enter__(self):
-        self.file = open(self.fpath, 'w', buffering=1)
-        self._writeline('-')
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self._writeline('-')
-        self.file.close()
+    try:
+        state_file = open(fpath, 'w', buffering=1)
+        writeline('-')
+        ns = types.SimpleNamespace(update=update)
+        yield ns
+    finally:
+        writeline('-')
+        state_file.close()
 
 
 async def mumble_online_client(host, port, state_writer):
