@@ -35,6 +35,33 @@ def simple_formatter(state, filters):
         return "Error"
 
 
+def emoji_formatter(state, filters):
+    if state is None:
+        return 'Offline'
+    elif 'error' in state:
+        return 'Server down'
+    elif 'users' in state:
+        users = [
+            user for user in state['users'].values()
+            if user['name'] not in filters
+        ]
+        nb_total = len(users)
+        nb_online = sum(
+            1 for u in users
+            if u.get('status') not in ('deaf', 'mute')
+        )
+        nb_away = nb_total - nb_online
+        return f'✔️ {nb_online} | 🕘 {nb_away}'
+    else:
+        return "Error"
+
+
+FORMATTERS = {
+    'emoji': emoji_formatter,
+    'simple': simple_formatter,
+}
+
+
 class FileStatusView:
     def __init__(self, fpath, filters=[], formatter=simple_formatter):
         self.fpath = fpath
@@ -63,7 +90,7 @@ class FileStatusView:
         self.file.close()
 
 
-async def mumble_online_client(host, port, state_writer):
+async def mumble_online_client(host, port, status_view):
     timeout = 30
     reader, writer = await wait_for(
         asyncio.open_connection(host, port), timeout
@@ -79,7 +106,7 @@ async def mumble_online_client(host, port, state_writer):
             if not data:
                 break
             state = json.loads(data)
-            state_writer.update(state)
+            status_view.update(state)
             logger.debug('Received: %r' % state)
     finally:
         logger.debug('Close the socket')
@@ -107,13 +134,18 @@ if __name__ == '__main__':
         '--filters', nargs='+', default=[],
         help="List of ignored pseudonyms"
     )
+    parser.add_argument(
+        '--formatter', choices=FORMATTERS.keys(), default='emoji'
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
         format='%(message)s'
     )
-    
+
+    formatter = FORMATTERS[args.formatter]
+
     base_dir = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp'))
     fpath = base_dir / 'mumble-online-users.txt'
     logger.info(f"Write state in: {fpath}")    
@@ -121,8 +153,10 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     if args.debug:
         loop.set_debug(True)
-    with FileStatusView(fpath, args.filters) as state_writer:
+    with FileStatusView(
+        fpath, args.filters, formatter
+    ) as status_view:
         loop.run_until_complete(
-            reconnect_agent(args.host, args.port, state_writer)
+            reconnect_agent(args.host, args.port, status_view)
         )
     loop.close()
