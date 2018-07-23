@@ -57,14 +57,16 @@ def create_request_handler(client_queues):
             data = {'params': {
                 'max_skip_time': MAX_SKIP_TIME,
             }}
-            params_output = json.dumps(data).encode() + b'\n'
-            self.wfile.write(params_output)
+            self._send_message(data)
 
             state = retrieve_server_state()
             while True:
-                output = json.dumps(state).encode() + b'\n'
-                self.wfile.write(output)
+                self._send_message(state)
                 state = self.queue.get()
+
+        def _send_message(message):
+            data = json.dumps(message)
+            self.wfile.write(message.encode() + b'\n')
 
     return RequestHandler
 
