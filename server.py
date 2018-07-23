@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
+import logging
 import socket
 import socketserver
 import time
@@ -12,10 +14,7 @@ import Ice
 
 import mice3 as mice
 
-
-LISTEN_ADDRESS = ("::", 43223)
-POLLING_TIME = 0.5
-MAX_SKIP_TIME = 30
+logger = logging.getLogger(__name__)
 
 
 def retrieve_server_state():
@@ -40,7 +39,7 @@ def retrieve_server_state():
     }
 
 
-def create_request_handler(client_queues):
+def create_request_handler(client_queues, max_interval):
     class RequestHandler(socketserver.StreamRequestHandler):
         disable_nagle_algorithm = True
 
@@ -54,19 +53,19 @@ def create_request_handler(client_queues):
             client_queues.remove(self.queue)
 
         def handle(self):
-            data = {'params': {
-                'max_skip_time': MAX_SKIP_TIME,
+            message = {'params': {
+                'max_interval': max_interval,
             }}
-            self._send_message(data)
+            self._send_message(message)
 
             state = retrieve_server_state()
             while True:
                 self._send_message(state)
                 state = self.queue.get()
 
-        def _send_message(message):
+        def _send_message(self, message):
             data = json.dumps(message)
-            self.wfile.write(message.encode() + b'\n')
+            self.wfile.write(data.encode() + b'\n')
 
     return RequestHandler
 
@@ -76,11 +75,11 @@ class TCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
 
     def handle_error(self, request, client_address):
-        print("User disconnected:", client_address)
+        logging.debug("User disconnected: %s", client_address)
 
 
-def mumble_thread(queues):
-    max_skips = MAX_SKIP_TIME // POLLING_TIME
+def mumble_thread(queues, max_interval, polling_interval):
+    max_skips = max_interval // polling_interval
     state = None
     skip_count = 0
     while True:
@@ -92,21 +91,47 @@ def mumble_thread(queues):
             skip_count = 0
             for q in queues.copy():
                 q.put(state)
-        time.sleep(POLLING_TIME)
+        time.sleep(polling_interval)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-l', '--host', default='::',
+        help="Listening address"
+    )
+    parser.add_argument('-p', '--port', type=int, default=43223,
+        help="Listening port"
+    )
+    parser.add_argument(
+        '-i', '--interval', type=float, default=0.5,
+        help="Interval between polls (in seconds)",
+    )
+    parser.add_argument(
+        '--max', type=float, default=30,
+        help="Maximum interval in seconds between updates (keep-alive interval)",
+    )
+    parser.add_argument('-d', '--debug', action="store_true")
+    args = parser.parse_args()
+
+    logging.basicConfig(
+        level=logging.DEBUG if args.debug else logging.INFO,
+        format='%(message)s'
+    )
+
     client_queues = deque()
 
     thread = Thread(
         target=mumble_thread,
         name="mumble_thread",
-        args=(client_queues,)
+        args=(client_queues, args.max, args.interval)
     )
     thread.start()
 
-    request_handler = create_request_handler(client_queues)
-    with TCPServer(LISTEN_ADDRESS, request_handler) as server:
-        address, port = LISTEN_ADDRESS
-        print(f"Listening for connections on: {port}")
+    request_handler = create_request_handler(
+        client_queues, args.max
+    )
+    with TCPServer((args.host, args.port), request_handler) as server:
+        logging.info(
+            f"Listening for connections on [{args.host}]:{args.port}"
+        )
         server.serve_forever()

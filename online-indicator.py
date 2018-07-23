@@ -72,7 +72,7 @@ async def mumble_online_client(host, port, state_writer):
         data = await wait_for(reader.readline(), timeout)
         params = json.loads(data).get('params')
         logger.debug('Received params: %r' % params)
-        timeout = params['max_skip_time'] + 5
+        timeout = params['max_interval'] + 5
 
         while True:
             data = await wait_for(reader.readline(), timeout)
