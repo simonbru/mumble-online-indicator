@@ -67,7 +67,7 @@ class FileStatusView:
         self.fpath = fpath
         self.filters = filters
         self.formatter = formatter
-        self.old_state = None
+        self.old_state = 'INITIAL_STATE'
 
     def _writeline(self, text):
         self.file.seek(0)
