@@ -113,16 +113,16 @@ async def mumble_online_client(host, port, status_view):
         writer.close()
 
 
-async def reconnect_agent(host, port, writer):
-    writer.update(None)
+async def reconnect_agent(host, port, status_view):
+    status_view.update(None)
     while True:
         logger.debug("Try connecting...")
         try:
-            await mumble_online_client(host, port, writer)
+            await mumble_online_client(host, port, status_view)
         except (socket.error, asyncio.TimeoutError):
             pass
-        writer.update(None)
-        await asyncio.sleep(2)
+        status_view.update(None)
+        await asyncio.sleep(3)
 
 
 if __name__ == '__main__':
