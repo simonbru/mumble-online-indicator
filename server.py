@@ -12,13 +12,13 @@ from threading import Thread
 
 import Ice
 
-import mice3 as mice
 
 logger = logging.getLogger(__name__)
 
 
 def retrieve_server_state():
     try:
+        import mice3 as mice
         server = mice.s
         users = server.getUsers()
     except Ice.SocketException:
