@@ -99,6 +99,7 @@ try:
     os.remove(dynslicefilepath)
     print("Success")
 except Exception as e:
+    raise  # disable fallback on user-specified slicefile
     print("Failed")
     print(str(e))
     while not os.path.exists(slicefile):
