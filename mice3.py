@@ -109,7 +109,7 @@ except Exception as e:
     print("Done")
 
 print("Import dynamically compiled murmur class...", end=' ')
-import Murmur
+import MumbleServer
 print("Done")
 print("Establish ice connection...", end=' ')
 
@@ -117,7 +117,7 @@ if secret:
     print("[protected]...", end=' ')
     ice.getImplicitContext().put("secret", secret)
 
-murmur = Murmur.MetaPrx.checkedCast(prx)
+murmur = MumbleServer.MetaPrx.checkedCast(prx)
 m = murmur
 print("Done")
 
